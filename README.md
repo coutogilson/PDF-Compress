@@ -61,6 +61,29 @@ Baixe a versão mais recente na página de [Releases](https://github.com/coutogi
 
 > 💡 O **AppImage** é portátil e integra-se ao menu de aplicativos (com ícone) ao usar ferramentas como o [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher).
 
+### ⚠️ Aviso do Windows SmartScreen
+
+Ao baixar o `.exe` direto do navegador, o Windows pode exibir **"O Windows protegeu o computador"**. Isso acontece porque o executável é novo e **não possui assinatura de código digital** (certificado pago) — **não é vírus**.
+
+Para executar mesmo assim:
+
+1. Clique em **"Mais informações"**
+2. Clique em **"Executar assim mesmo"**
+
+**Como ter certeza de que o arquivo é legítimo:** compare o hash SHA-256 do arquivo baixado com o publicado na página da Release:
+
+```powershell
+Get-FileHash .\PDF-Compress-windows-x64.exe -Algorithm SHA256
+```
+
+**Alternativa sem aviso nenhum (recomendada):** instale via **winget** (gerenciador oficial da Microsoft), que valida o pacote:
+
+```powershell
+winget install coutogilson.PDF-Compress
+```
+
+> 💡 Com o tempo e o volume de downloads, a reputação do arquivo sobe no SmartScreen e o aviso deixa de aparecer naturalmente.
+
 ## Como compilar você mesmo
 
 O build usa [PyInstaller](https://pyinstaller.org/) dentro do ambiente virtual:

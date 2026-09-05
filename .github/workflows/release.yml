@@ -117,3 +117,16 @@ jobs:
             artifacts/linux/PDF-Compress-linux-x64
             artifacts/linux/PDF-Compress-linux-x64.AppImage
           generate_release_notes: true
+
+  publish-winget:
+    name: Publish to winget
+    needs: release
+    if: vars.WINGET_ENABLED == 'true'
+    runs-on: windows-latest
+    steps:
+      - name: Submit package to winget-pkgs
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: coutogilson.PDF-Compress
+          installers-regex: 'PDF-Compress-windows-x64\.exe$'
+          token: ${{ secrets.WINGET_TOKEN }}

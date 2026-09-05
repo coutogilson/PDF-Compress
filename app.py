@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter import scrolledtext
 import threading
+import webbrowser
 from PIL import Image
 import io
 
@@ -12,7 +13,7 @@ class PDFCompressor:
     def __init__(self, root):
         self.root = root
         self.root.title(f"Compressor de PDF v{APP_VERSION} - Alta Qualidade")
-        self.root.geometry("700x600")
+        self.root.geometry("700x680")
         self.root.resizable(True, True)
         
         # Variáveis
@@ -80,10 +81,33 @@ class PDFCompressor:
         ttk.Radiobutton(method_frame, text="Python (PyMuPDF)", value="python",
                        variable=self.compression_method).grid(row=0, column=2)
 
+        # Informações sobre os métodos de compressão
+        info_frame = ttk.LabelFrame(options_frame, text="Sobre os métodos", padding="8")
+        info_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(10, 5))
+        info_frame.columnconfigure(0, weight=1)
+
+        gs_text = ("GhostScript: melhor qualidade para imagens e mantém a individualidade "
+                   "das imagens e textos selecionáveis, mas os arquivos ficam maiores e "
+                   "requer a ferramenta instalada no dispositivo.")
+        py_text = ("Python (PyMuPDF): gera arquivos menores, porém renderiza cada página "
+                   "como uma única imagem — os textos deixam de ser selecionáveis e as "
+                   "imagens perdem a individualidade no PDF.")
+
+        ttk.Label(info_frame, text=gs_text, wraplength=560, justify=tk.LEFT,
+                 foreground="#1a5276").grid(row=0, column=0, sticky=tk.W, pady=2)
+        ttk.Label(info_frame, text=py_text, wraplength=560, justify=tk.LEFT,
+                 foreground="#7b4b00").grid(row=1, column=0, sticky=tk.W, pady=2)
+
+        gs_link = ttk.Label(info_frame, text="⬇ Baixar GhostScript (oficial)",
+                           foreground="#0563c1", cursor="hand2")
+        gs_link.grid(row=2, column=0, sticky=tk.W, pady=(4, 0))
+        gs_link.bind("<Button-1>", lambda e: webbrowser.open(
+            "https://ghostscript.com/releases/gsdnld.html"))
+
         # Checkbox para otimização adicional
         self.optimize_images = tk.BooleanVar(value=True)
         ttk.Checkbutton(options_frame, text="Otimizar imagens (reduzir cores)", 
-                       variable=self.optimize_images).grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=5)
+                       variable=self.optimize_images).grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=5)
         
         # Botões de ação
         action_frame = ttk.Frame(main_frame)
