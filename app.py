@@ -101,15 +101,11 @@ class PDFCompressor:
         self.dpi_value_label = ttk.Label(options_frame, text=str(self.dpi_level.get()), width=4)
         self.dpi_value_label.grid(row=1, column=2, padx=5, pady=5)
 
-        # Marcas de referência do DPI (destaque em 150 e 300)
-        dpi_marks = ttk.Frame(options_frame)
-        dpi_marks.grid(row=2, column=1, sticky=(tk.W, tk.E), padx=10)
-        dpi_marks.columnconfigure((0, 1, 2), weight=1)
-        ttk.Label(dpi_marks, text="70", foreground="#777777").grid(row=0, column=0, sticky=tk.W)
-        ttk.Label(dpi_marks, text="150", font=("Arial", 9, "bold"),
-                 foreground="#1a5276").grid(row=0, column=1)
-        ttk.Label(dpi_marks, text="300", font=("Arial", 9, "bold"),
-                 foreground="#1a5276").grid(row=0, column=2, sticky=tk.E)
+        # Régua de DPI com ticks nas posições exatas (70, 150 e 300)
+        self.dpi_ruler = tk.Canvas(options_frame, height=22, highlightthickness=0)
+        self.dpi_ruler.grid(row=2, column=1, sticky=(tk.W, tk.E), padx=10)
+        self.dpi_ruler.bind("<Configure>", self._draw_dpi_ruler)
+        self.dpi_ruler.bind("<Button-1>", self._dpi_ruler_click)
         self._update_dpi_label()
 
         # Método de compressão
@@ -201,12 +197,53 @@ class PDFCompressor:
         self.root.update()
 
     def _round_dpi(self, value):
-        """Arredonda o DPI para o múltiplo de 10 mais próximo."""
-        dpi = int(round(float(value) / 10.0) * 10)
+        """Arredonda o DPI para o múltiplo de 10, com snap magnético em 150 e 300."""
+        dpi = float(value)
+        # Snap: se estiver a até 6 de distância de um valor-chave, "gruda" nele
+        for snap in (150, 300):
+            if abs(dpi - snap) <= 6:
+                dpi = snap
+                break
+        dpi = int(round(dpi / 10.0) * 10)
         dpi = max(70, min(300, dpi))
         if self.dpi_level.get() != dpi:
             self.dpi_level.set(dpi)
         self._update_dpi_label()
+
+    DPI_MIN = 70
+    DPI_MAX = 300
+    DPI_MARKS = (70, 150, 300)
+
+    def _draw_dpi_ruler(self, event=None):
+        """Desenha a régua com ticks e rótulos nas posições proporcionais exatas."""
+        c = self.dpi_ruler
+        c.delete("all")
+        width = c.winfo_width()
+        if width < 2:
+            return
+        span = self.DPI_MAX - self.DPI_MIN
+        for mark in self.DPI_MARKS:
+            x = (mark - self.DPI_MIN) / span * (width - 2) + 1
+            major = mark in (150, 300)
+            color = "#1a5276" if major else "#999999"
+            # tick
+            c.create_line(x, 2, x, 12 if major else 8, fill=color,
+                          width=2 if major else 1)
+            # rótulo
+            c.create_text(x, 18, text=str(mark),
+                          font=("Arial", 8, "bold" if major else "normal"),
+                          fill=color)
+        # linha de base
+        c.create_line(1, 12, width - 1, 12, fill="#dddddd")
+
+    def _dpi_ruler_click(self, event):
+        """Clicar na régua posiciona o slider no DPI correspondente."""
+        width = self.dpi_ruler.winfo_width()
+        if width < 2:
+            return
+        frac = min(max((event.x - 1) / (width - 2), 0.0), 1.0)
+        self.dpi_level.set(self.DPI_MIN + frac * (self.DPI_MAX - self.DPI_MIN))
+        self._round_dpi(self.dpi_level.get())
 
     def _update_dpi_label(self):
         """Atualiza o rótulo do DPI, destacando 150 e 300."""
