@@ -1,6 +1,8 @@
 # PDF-Compress
 
-Compressor de PDF com interface gráfica (Tkinter), usando **GhostScript** ou **PyMuPDF** como motor de compressão, com fallback automático entre eles.
+🇧🇷 **Português** | [🇺🇸 English](README.en.md)
+
+Compressor de PDF com interface gráfica, usando **GhostScript** ou **PyMuPDF** como motor de compressão, com fallback automático entre eles.
 
 Ideal para reduzir o tamanho de PDFs pesados (banners, documentos escaneados, apresentações) sem perder o conteúdo visual.
 
@@ -84,23 +86,6 @@ winget install coutogilson.PDF-Compress
 
 > 💡 Com o tempo e o volume de downloads, a reputação do arquivo sobe no SmartScreen e o aviso deixa de aparecer naturalmente.
 
-## Como compilar você mesmo
-
-O build usa [PyInstaller](https://pyinstaller.org/) dentro do ambiente virtual:
-
-```bash
-# Instalar dependências de desenvolvimento
-pip install -r requirements-dev.txt
-
-# Windows
-python -m PyInstaller --onefile --windowed --name PDF-Compress app.py
-
-# Linux
-python3 -m PyInstaller --onefile --windowed --name PDF-Compress app.py
-```
-
-O executável será gerado na pasta `dist/`.
-
 ## Como funciona
 
 | Método | Prós | Contras |
@@ -109,17 +94,6 @@ O executável será gerado na pasta `dist/`.
 | **Python (PyMuPDF)** | Não requer dependências externas, preserva dimensões exatas das páginas | Converte páginas em imagens (texto deixa de ser selecionável); mais lento em PDFs grandes |
 
 No modo **Automático**, o app detecta o GhostScript (no PATH ou em `C:\Program Files\gs`) e faz fallback para o PyMuPDF se necessário.
-
-## Publicando uma nova versão
-
-As releases são compiladas automaticamente via GitHub Actions. Basta criar e enviar uma tag:
-
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-O workflow gera os binários de Windows e Linux e os anexa à release.
 
 ## Segurança
 
