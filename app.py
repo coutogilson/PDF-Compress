@@ -33,7 +33,7 @@ def get_config_path():
 class PDFCompressor:
     def __init__(self, root):
         self.root = root
-        self.root.title(f"Compressor de PDF v{APP_VERSION} - Alta Qualidade")
+        self.root.title(f"Compressor de PDF v{APP_VERSION}")
         self.root.geometry("780x720")
         self.root.minsize(680, 640)
         self.root.resizable(True, True)
@@ -200,7 +200,7 @@ class PDFCompressor:
         """Arredonda o DPI para o múltiplo de 10, com snap magnético em 150 e 300."""
         dpi = float(value)
         # Snap: se estiver a até 6 de distância de um valor-chave, "gruda" nele
-        for snap in (150, 300):
+        for snap in self.DPI_MAJOR:
             if abs(dpi - snap) <= 6:
                 dpi = snap
                 break
@@ -213,6 +213,7 @@ class PDFCompressor:
     DPI_MIN = 70
     DPI_MAX = 300
     DPI_MARKS = (70, 150, 300)
+    DPI_MAJOR = (70, 150, 300)  # marcas com destaque
 
     def _draw_dpi_ruler(self, event=None):
         """Desenha a régua com ticks e rótulos nas posições proporcionais exatas."""
@@ -224,13 +225,19 @@ class PDFCompressor:
         span = self.DPI_MAX - self.DPI_MIN
         for mark in self.DPI_MARKS:
             x = (mark - self.DPI_MIN) / span * (width - 2) + 1
-            major = mark in (150, 300)
+            major = mark in self.DPI_MAJOR
             color = "#1a5276" if major else "#999999"
             # tick
             c.create_line(x, 2, x, 12 if major else 8, fill=color,
                           width=2 if major else 1)
-            # rótulo
-            c.create_text(x, 18, text=str(mark),
+            # rótulo ancorado para não cortar nas extremidades
+            if mark == self.DPI_MIN:
+                anchor, tx = "w", x
+            elif mark == self.DPI_MAX:
+                anchor, tx = "e", x
+            else:
+                anchor, tx = "center", x
+            c.create_text(tx, 18, text=str(mark), anchor=anchor,
                           font=("Arial", 8, "bold" if major else "normal"),
                           fill=color)
         # linha de base
@@ -246,9 +253,9 @@ class PDFCompressor:
         self._round_dpi(self.dpi_level.get())
 
     def _update_dpi_label(self):
-        """Atualiza o rótulo do DPI, destacando 150 e 300."""
+        """Atualiza o rótulo do DPI, destacando os valores-chave."""
         dpi = self.dpi_level.get()
-        destaque = dpi in (150, 300)
+        destaque = dpi in self.DPI_MAJOR
         self.dpi_value_label.config(
             text=str(dpi),
             font=("Arial", 9, "bold") if destaque else ("Arial", 9, "normal"),
