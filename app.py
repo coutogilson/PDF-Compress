@@ -5,15 +5,13 @@ from tkinter import scrolledtext
 import threading
 from PIL import Image
 import io
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.utils import ImageReader
-import PyPDF2
+
+APP_VERSION = "1.0.0"
 
 class PDFCompressor:
     def __init__(self, root):
         self.root = root
-        self.root.title("Compressor de PDF - Alta Qualidade")
+        self.root.title(f"Compressor de PDF v{APP_VERSION} - Alta Qualidade")
         self.root.geometry("700x600")
         self.root.resizable(True, True)
         
@@ -154,39 +152,6 @@ class PDFCompressor:
         self.progress.stop()
         self.progress['value'] = 0
         self.log_message("Campos limpos")
-    
-    def compress_image(self, image_data, quality, dpi, optimize):
-        """Comprime uma imagem individual"""
-        try:
-            img = Image.open(io.BytesIO(image_data))
-            
-            # Reduzir resolução se necessário
-            current_dpi = img.info.get('dpi', (dpi, dpi))
-            if current_dpi[0] > dpi:
-                width = int(img.width * dpi / current_dpi[0])
-                height = int(img.height * dpi / current_dpi[1])
-                img = img.resize((width, height), Image.Resampling.LANCZOS)
-            
-            # Otimizar cores se solicitado
-            if optimize and img.mode in ['RGB', 'RGBA']:
-                if img.mode == 'RGBA':
-                    img = img.convert('RGB')
-                # Reduzir para 256 cores se for fotografia
-                if img.mode == 'RGB':
-                    img = img.quantize(colors=256, method=2)
-                    img = img.convert('RGB')
-            
-            # Salvar com compressão
-            output = io.BytesIO()
-            if img.mode in ['RGB', 'RGBA']:
-                img.save(output, format='JPEG', quality=quality, optimize=True)
-            else:
-                img.save(output, format='PNG', optimize=True)
-            
-            return output.getvalue()
-        except Exception as e:
-            self.log_message(f"Erro ao comprimir imagem: {str(e)}")
-            return image_data
     
     def compress_pdf(self, input_path, output_path, quality, dpi, optimize):
         """Comprime o PDF renderizando cada página como imagem JPEG otimizada.
