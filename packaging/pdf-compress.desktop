@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=PDF Compress
+Comment=Compress PDF files using GhostScript or PyMuPDF
+Exec=PDF-Compress
+Icon=pdf-compress
+Type=Application
+Categories=Utility;Office;
+Terminal=false

@@ -9,20 +9,9 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            name: windows
-            artifact: PDF-Compress.exe
-          - os: ubuntu-latest
-            name: linux
-            artifact: PDF-Compress
-
+  build-windows:
+    name: Build Windows (x64)
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,42 +21,87 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install tkinter (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y python3-tk
-
       - name: Create virtual environment
         run: python -m venv .venv
 
-      - name: Install dependencies (Windows)
-        if: runner.os == 'Windows'
+      - name: Install dependencies
         run: |
           .\.venv\Scripts\python.exe -m pip install --upgrade pip
           .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 
-      - name: Install dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          .venv/bin/python -m pip install --upgrade pip
-          .venv/bin/python -m pip install -r requirements-dev.txt
-
-      - name: Build with PyInstaller (Windows)
-        if: runner.os == 'Windows'
+      - name: Build with PyInstaller
         run: .\.venv\Scripts\python.exe -m PyInstaller --onefile --windowed --name PDF-Compress app.py
 
-      - name: Build with PyInstaller (Linux)
-        if: runner.os == 'Linux'
-        run: .venv/bin/python -m PyInstaller --onefile --windowed --name PDF-Compress app.py
+      - name: Rename artifact
+        run: Move-Item dist\PDF-Compress.exe dist\PDF-Compress-windows-x64.exe
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pdf-compress-${{ matrix.name }}
-          path: dist/${{ matrix.artifact }}
+          name: windows
+          path: dist/PDF-Compress-windows-x64.exe
+
+  build-linux:
+    name: Build Linux (binário + AppImage)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install tkinter
+        run: sudo apt-get update && sudo apt-get install -y python3-tk desktop-file-utils
+
+      - name: Create virtual environment
+        run: python -m venv .venv
+
+      - name: Install dependencies
+        run: |
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install -r requirements-dev.txt
+
+      - name: Build standalone binary (onefile)
+        run: .venv/bin/python -m PyInstaller --onefile --windowed --name PDF-Compress app.py
+
+      - name: Rename binary
+        run: mv dist/PDF-Compress dist/PDF-Compress-linux-x64 && chmod +x dist/PDF-Compress-linux-x64
+
+      - name: Build AppDir (onedir)
+        run: .venv/bin/python -m PyInstaller --onedir --windowed --name PDF-Compress --clean app.py
+
+      - name: Assemble AppDir
+        run: |
+          mkdir -p AppDir/usr/bin AppDir/usr/share/icons/hicolor/256x256/apps
+          cp -r dist/PDF-Compress/* AppDir/usr/bin/
+          cp assets/icon.png AppDir/usr/share/icons/hicolor/256x256/apps/pdf-compress.png
+          cp assets/icon.png AppDir/pdf-compress.png
+          cp packaging/pdf-compress.desktop AppDir/pdf-compress.desktop
+          printf '#!/bin/sh\nexec "$APPDIR/usr/bin/PDF-Compress" "$@"\n' > AppDir/AppRun
+          chmod +x AppDir/AppRun
+
+      - name: Download appimagetool
+        run: |
+          wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -O appimagetool
+          chmod +x appimagetool
+
+      - name: Generate AppImage
+        run: ARCH=x86_64 ./appimagetool --appimage-extract-and-run AppDir dist/PDF-Compress-linux-x64.AppImage
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            dist/PDF-Compress-linux-x64
+            dist/PDF-Compress-linux-x64.AppImage
 
   release:
     name: Publish Release
-    needs: build
+    needs: [build-windows, build-linux]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -79,6 +113,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/pdf-compress-windows/PDF-Compress.exe
-            artifacts/pdf-compress-linux/PDF-Compress
+            artifacts/windows/PDF-Compress-windows-x64.exe
+            artifacts/linux/PDF-Compress-linux-x64
+            artifacts/linux/PDF-Compress-linux-x64.AppImage
           generate_release_notes: true

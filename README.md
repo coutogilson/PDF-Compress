@@ -53,8 +53,13 @@ python app.py
 
 Baixe a versão mais recente na página de [Releases](https://github.com/coutogilson/PDF-Compress/releases):
 
-- **Windows**: `PDF-Compress.exe` — basta executar (não precisa de instalação)
-- **Linux**: `PDF-Compress` — dê permissão de execução: `chmod +x PDF-Compress && ./PDF-Compress`
+| Arquivo | Plataforma | Uso |
+|---|---|---|
+| `PDF-Compress-windows-x64.exe` | Windows 10/11 (64 bits) | Executar direto, sem instalação |
+| `PDF-Compress-linux-x64.AppImage` | Linux (64 bits) — **recomendado** | `chmod +x PDF-Compress-linux-x64.AppImage && ./PDF-Compress-linux-x64.AppImage` |
+| `PDF-Compress-linux-x64` | Linux (64 bits) — binário simples | `chmod +x PDF-Compress-linux-x64 && ./PDF-Compress-linux-x64` |
+
+> 💡 O **AppImage** é portátil e integra-se ao menu de aplicativos (com ícone) ao usar ferramentas como o [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher).
 
 ## Como compilar você mesmo
 
