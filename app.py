@@ -1,4 +1,7 @@
 import os
+import sys
+import json
+import subprocess
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter import scrolledtext
@@ -7,23 +10,51 @@ import webbrowser
 from PIL import Image
 import io
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
+
+DEFAULTS = {
+    "quality": 85,
+    "dpi": 150,
+    "method": "auto",
+    "optimize": False,
+}
+
+
+def get_config_path():
+    """Retorna o caminho do arquivo de configuração por SO."""
+    if sys.platform == "win32":
+        base = os.environ.get("APPDATA") or os.path.expanduser("~")
+        folder = os.path.join(base, "PDF-Compress")
+    else:
+        folder = os.path.join(os.path.expanduser("~"), ".config", "pdf-compress")
+    os.makedirs(folder, exist_ok=True)
+    return os.path.join(folder, "config.json")
 
 class PDFCompressor:
     def __init__(self, root):
         self.root = root
         self.root.title(f"Compressor de PDF v{APP_VERSION} - Alta Qualidade")
-        self.root.geometry("700x680")
+        self.root.geometry("780x720")
+        self.root.minsize(680, 640)
         self.root.resizable(True, True)
         
+        # Carregar pré-definições salvas
+        cfg = self.load_config()
+
         # Variáveis
         self.input_file = tk.StringVar()
         self.output_file = tk.StringVar()
-        self.compression_level = tk.IntVar(value=85)
-        self.dpi_level = tk.IntVar(value=150)
+        self.compression_level = tk.IntVar(value=cfg["quality"])
+        self.dpi_level = tk.IntVar(value=cfg["dpi"])
+        self.optimize_var = tk.BooleanVar(value=cfg["optimize"])
         self.is_compressing = False
-        
+        self.last_output_path = None
+        self._initial_method = cfg["method"]
+
         self.setup_ui()
+
+        # Auto-salvar pré-definições ao fechar
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         
     def setup_ui(self):
         # Frame principal
@@ -42,13 +73,13 @@ class PDFCompressor:
         
         # Seleção do arquivo de entrada
         ttk.Label(main_frame, text="Arquivo PDF:").grid(row=1, column=0, sticky=tk.W, pady=5)
-        ttk.Entry(main_frame, textvariable=self.input_file, width=50).grid(row=1, column=1, padx=5, pady=5)
-        ttk.Button(main_frame, text="Selecionar", command=self.select_input_file).grid(row=1, column=2, pady=5)
-        
+        ttk.Entry(main_frame, textvariable=self.input_file).grid(row=1, column=1, padx=5, pady=5, sticky=(tk.W, tk.E))
+        ttk.Button(main_frame, text="Selecionar", command=self.select_input_file, width=12).grid(row=1, column=2, pady=5, sticky=tk.E)
+
         # Seleção do arquivo de saída
         ttk.Label(main_frame, text="Salvar como:").grid(row=2, column=0, sticky=tk.W, pady=5)
-        ttk.Entry(main_frame, textvariable=self.output_file, width=50).grid(row=2, column=1, padx=5, pady=5)
-        ttk.Button(main_frame, text="Destino", command=self.select_output_file).grid(row=2, column=2, pady=5)
+        ttk.Entry(main_frame, textvariable=self.output_file).grid(row=2, column=1, padx=5, pady=5, sticky=(tk.W, tk.E))
+        ttk.Button(main_frame, text="Destino", command=self.select_output_file, width=12).grid(row=2, column=2, pady=5, sticky=tk.E)
         
         # Opções de compressão
         options_frame = ttk.LabelFrame(main_frame, text="Opções de Compressão", padding="10")
@@ -62,18 +93,30 @@ class PDFCompressor:
         quality_scale.grid(row=0, column=1, padx=10, pady=5, sticky=(tk.W, tk.E))
         ttk.Label(options_frame, textvariable=self.compression_level).grid(row=0, column=2, padx=5, pady=5)
         
-        # DPI para imagens
+        # DPI para imagens (passos de 10, com marcas em 150 e 300)
         ttk.Label(options_frame, text="DPI (resolução):").grid(row=1, column=0, sticky=tk.W, pady=5)
-        dpi_scale = ttk.Scale(options_frame, from_=72, to=300, variable=self.dpi_level,
-                             orient=tk.HORIZONTAL, length=200)
+        dpi_scale = ttk.Scale(options_frame, from_=70, to=300, variable=self.dpi_level,
+                             orient=tk.HORIZONTAL, command=self._round_dpi)
         dpi_scale.grid(row=1, column=1, padx=10, pady=5, sticky=(tk.W, tk.E))
-        ttk.Label(options_frame, textvariable=self.dpi_level).grid(row=1, column=2, padx=5, pady=5)
-        
+        self.dpi_value_label = ttk.Label(options_frame, text=str(self.dpi_level.get()), width=4)
+        self.dpi_value_label.grid(row=1, column=2, padx=5, pady=5)
+
+        # Marcas de referência do DPI (destaque em 150 e 300)
+        dpi_marks = ttk.Frame(options_frame)
+        dpi_marks.grid(row=2, column=1, sticky=(tk.W, tk.E), padx=10)
+        dpi_marks.columnconfigure((0, 1, 2), weight=1)
+        ttk.Label(dpi_marks, text="70", foreground="#777777").grid(row=0, column=0, sticky=tk.W)
+        ttk.Label(dpi_marks, text="150", font=("Arial", 9, "bold"),
+                 foreground="#1a5276").grid(row=0, column=1)
+        ttk.Label(dpi_marks, text="300", font=("Arial", 9, "bold"),
+                 foreground="#1a5276").grid(row=0, column=2, sticky=tk.E)
+        self._update_dpi_label()
+
         # Método de compressão
-        ttk.Label(options_frame, text="Método:").grid(row=2, column=0, sticky=tk.W, pady=5)
-        self.compression_method = tk.StringVar(value="auto")
+        ttk.Label(options_frame, text="Método:").grid(row=3, column=0, sticky=tk.W, pady=5)
+        self.compression_method = tk.StringVar(value=self._initial_method)
         method_frame = ttk.Frame(options_frame)
-        method_frame.grid(row=2, column=1, columnspan=2, sticky=tk.W, padx=10, pady=5)
+        method_frame.grid(row=3, column=1, columnspan=2, sticky=tk.W, padx=10, pady=5)
         ttk.Radiobutton(method_frame, text="Automático", value="auto",
                        variable=self.compression_method).grid(row=0, column=0, padx=(0, 10))
         ttk.Radiobutton(method_frame, text="GhostScript", value="ghostscript",
@@ -83,7 +126,7 @@ class PDFCompressor:
 
         # Informações sobre os métodos de compressão
         info_frame = ttk.LabelFrame(options_frame, text="Sobre os métodos", padding="8")
-        info_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(10, 5))
+        info_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(10, 5))
         info_frame.columnconfigure(0, weight=1)
 
         gs_text = ("GhostScript: melhor qualidade para imagens e mantém a individualidade "
@@ -104,22 +147,35 @@ class PDFCompressor:
         gs_link.bind("<Button-1>", lambda e: webbrowser.open(
             "https://ghostscript.com/releases/gsdnld.html"))
 
-        # Checkbox para otimização adicional
-        self.optimize_images = tk.BooleanVar(value=True)
-        ttk.Checkbutton(options_frame, text="Otimizar imagens (reduzir cores)", 
-                       variable=self.optimize_images).grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=5)
-        
+        # Checkbox para otimização adicional (desmarcado por padrão)
+        ttk.Checkbutton(options_frame, text="Otimizar imagens (reduzir cores)",
+                       variable=self.optimize_var).grid(row=5, column=0, columnspan=2, sticky=tk.W, pady=5)
+
         # Botões de ação
         action_frame = ttk.Frame(main_frame)
-        action_frame.grid(row=4, column=0, columnspan=3, pady=20)
-        
-        self.compress_button = ttk.Button(action_frame, text="Comprimir PDF", 
-                                         command=self.start_compression, width=20)
-        self.compress_button.grid(row=0, column=0, padx=5)
-        
-        self.clear_button = ttk.Button(action_frame, text="Limpar", 
-                                      command=self.clear_fields, width=15)
-        self.clear_button.grid(row=0, column=1, padx=5)
+        action_frame.grid(row=4, column=0, columnspan=3, pady=15)
+
+        self.compress_button = ttk.Button(action_frame, text="Comprimir PDF",
+                                         command=self.start_compression, width=18)
+        self.compress_button.grid(row=0, column=0, padx=4)
+
+        self.clear_button = ttk.Button(action_frame, text="Limpar",
+                                      command=self.clear_fields, width=12)
+        self.clear_button.grid(row=0, column=1, padx=4)
+
+        self.open_pdf_button = ttk.Button(action_frame, text="📄 Abrir PDF",
+                                         command=self.open_output_pdf, width=14,
+                                         state='disabled')
+        self.open_pdf_button.grid(row=0, column=2, padx=4)
+
+        self.open_folder_button = ttk.Button(action_frame, text="📁 Abrir pasta",
+                                            command=self.open_output_folder, width=14,
+                                            state='disabled')
+        self.open_folder_button.grid(row=0, column=3, padx=4)
+
+        self.restore_button = ttk.Button(action_frame, text="Restaurar padrões",
+                                        command=self.restore_defaults, width=18)
+        self.restore_button.grid(row=0, column=4, padx=4)
         
         # Barra de progresso
         self.progress = ttk.Progressbar(main_frame, mode='indeterminate')
@@ -143,7 +199,93 @@ class PDFCompressor:
         self.log_text.insert(tk.END, f"{message}\n")
         self.log_text.see(tk.END)
         self.root.update()
-        
+
+    def _round_dpi(self, value):
+        """Arredonda o DPI para o múltiplo de 10 mais próximo."""
+        dpi = int(round(float(value) / 10.0) * 10)
+        dpi = max(70, min(300, dpi))
+        if self.dpi_level.get() != dpi:
+            self.dpi_level.set(dpi)
+        self._update_dpi_label()
+
+    def _update_dpi_label(self):
+        """Atualiza o rótulo do DPI, destacando 150 e 300."""
+        dpi = self.dpi_level.get()
+        destaque = dpi in (150, 300)
+        self.dpi_value_label.config(
+            text=str(dpi),
+            font=("Arial", 9, "bold") if destaque else ("Arial", 9, "normal"),
+            foreground="#1a5276" if destaque else "#000000",
+        )
+
+    def load_config(self):
+        """Carrega pré-definições salvas; retorna DEFAULTS se não existir."""
+        try:
+            with open(get_config_path(), "r", encoding="utf-8") as f:
+                data = json.load(f)
+            cfg = dict(DEFAULTS)
+            for key in DEFAULTS:
+                if key in data:
+                    cfg[key] = data[key]
+            return cfg
+        except Exception:
+            return dict(DEFAULTS)
+
+    def save_config(self):
+        """Salva as pré-definições atuais."""
+        try:
+            data = {
+                "quality": int(self.compression_level.get()),
+                "dpi": int(self.dpi_level.get()),
+                "method": self.compression_method.get(),
+                "optimize": bool(self.optimize_var.get()),
+            }
+            with open(get_config_path(), "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            print(f"Não foi possível salvar as pré-definições: {e}")
+
+    def on_close(self):
+        """Salva pré-definições e fecha a aplicação."""
+        self.save_config()
+        self.root.destroy()
+
+    def restore_defaults(self):
+        """Restaura as pré-definições padrão e remove o arquivo de configuração."""
+        self.compression_level.set(DEFAULTS["quality"])
+        self.dpi_level.set(DEFAULTS["dpi"])
+        self.compression_method.set(DEFAULTS["method"])
+        self.optimize_var.set(DEFAULTS["optimize"])
+        self._update_dpi_label()
+        try:
+            os.remove(get_config_path())
+        except OSError:
+            pass
+        self.log_message("Pré-definições restauradas para os padrões.")
+
+    def _open_path(self, path):
+        """Abre um arquivo ou pasta no aplicativo padrão do SO."""
+        if sys.platform == "win32":
+            os.startfile(path)
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", path])
+        else:
+            subprocess.Popen(["xdg-open", path])
+
+    def open_output_pdf(self):
+        """Abre o PDF comprimido gerado por último."""
+        if self.last_output_path and os.path.exists(self.last_output_path):
+            self._open_path(self.last_output_path)
+        else:
+            messagebox.showwarning("Aviso", "Nenhum PDF comprimido disponível.")
+
+    def open_output_folder(self):
+        """Abre a pasta onde está o PDF comprimido."""
+        if self.last_output_path and os.path.exists(self.last_output_path):
+            self._open_path(os.path.dirname(self.last_output_path))
+        else:
+            messagebox.showwarning("Aviso", "Nenhum PDF comprimido disponível.")
+
     def select_input_file(self):
         """Seleciona arquivo PDF de entrada"""
         filename = filedialog.askopenfilename(
@@ -172,6 +314,9 @@ class PDFCompressor:
         """Limpa os campos do formulário"""
         self.input_file.set("")
         self.output_file.set("")
+        self.last_output_path = None
+        self.open_pdf_button.config(state='disabled')
+        self.open_folder_button.config(state='disabled')
         self.log_text.delete(1.0, tk.END)
         self.progress.stop()
         self.progress['value'] = 0
@@ -370,7 +515,7 @@ class PDFCompressor:
         try:
             quality = self.compression_level.get()
             dpi = self.dpi_level.get()
-            optimize = self.optimize_images.get()
+            optimize = self.optimize_var.get()
             
             self.log_message(f"Qualidade: {quality}%")
             self.log_message(f"DPI: {dpi}")
@@ -394,6 +539,9 @@ class PDFCompressor:
                 success = self.compress_pdf(input_path, output_path, quality, dpi, optimize)
             
             if success:
+                self.last_output_path = output_path
+                self.open_pdf_button.config(state='normal')
+                self.open_folder_button.config(state='normal')
                 self.log_message("✅ Compressão finalizada com sucesso!")
                 messagebox.showinfo("Sucesso", f"PDF comprimido salvo em:\n{output_path}")
             else:
